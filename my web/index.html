@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FuyouAI - AI 销售教练与内容创作系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #f8fafc; color: #0f172a; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin: 0 auto; height: 300px; }
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Custom Scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        /* Typing Indicator */
+        .typing-indicator::after { content: '...'; animation: typing 1s infinite; }
+        @keyframes typing { 0% { content: '.'; } 33% { content: '..'; } 66% { content: '...'; } }
+        /* Coach Response Styles */
+        .coach-section-title { font-size: 0.8rem; font-weight: 700; color: #1e40af; margin-top: 1rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; border-left: 3px solid #3b82f6; padding-left: 0.5rem; background-color: #f1f5f9; padding-top: 0.25rem; padding-bottom: 0.25rem; border-radius: 0 4px 4px 0; }
+        .coach-content { font-size: 0.95rem; color: #334155; line-height: 1.6; margin-bottom: 0.5rem; }
+        .coach-content ul { list-style-type: disc; padding-left: 1.2rem; margin-top: 0.25rem; }
+        .coach-content li { margin-bottom: 0.25rem; }
+        .coach-highlight { background-color: #eff6ff; color: #1d4ed8; padding: 0 4px; border-radius: 2px; font-weight: 500; }
+        .coach-tag { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 0.25rem; font-size: 0.75rem; margin-right: 0.5rem; background-color: #eff6ff; color: #2563eb; border: 1px solid #dbeafe; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <!-- Notification Bar -->
+    <div class="bg-blue-600 text-white text-xs py-2 text-center font-medium">
+        让普通人也能拥有专业销售教练 🚀 <span class="opacity-80 ml-2 cursor-pointer hover:underline">查看最新更新</span>
+    </div>
+
+    <!-- Navigation -->
+    <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-slate-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <div class="flex-shrink-0 flex items-center cursor-pointer" onclick="app.navigate('home')">
+                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-2">
+                        <i data-lucide="zap" class="text-white w-5 h-5"></i>
+                    </div>
+                    <span class="font-bold text-xl tracking-tight text-slate-900">Fuyou<span class="text-blue-600">AI</span></span>
+                </div>
+                <nav class="hidden md:flex space-x-1 lg:space-x-6 items-center h-full" id="desktop-nav"></nav>
+                <div class="flex items-center space-x-3">
+                    <button onclick="app.navigate('login')" class="text-sm font-medium text-slate-600 hover:text-slate-900 hidden sm:block">登录</button>
+                    <button class="bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/10">免费开始</button>
+                    <button class="md:hidden text-slate-600 hover:text-slate-900 p-2"><i data-lucide="menu" class="w-6 h-6"></i></button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main id="app-root" class="flex-grow"></main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 text-slate-400 py-12 mt-auto border-t border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <div class="flex items-center justify-center gap-2 mb-4">
+                <i data-lucide="zap" class="w-6 h-6 text-blue-500"></i>
+                <span class="text-white font-bold text-xl">FuyouAI</span>
+            </div>
+            <p class="text-sm mb-6">© 2023 FuyouAI Inc. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        const app = {
+            // ============================================================
+            // ⚠️ 生产环境配置 ⚠️
+            // 这里我们填入标准的相对路径。
+            // 在您点击右侧 "Preview" 时，因为它找不到后台，会自动降级为【演示模式】（显示黄色标签）。
+            // 当您部署到 Netlify 后，因为它能找到后台，会自动升级为【真实模式】（黄色标签消失）。
+            // ============================================================
+            config: {
+                apiEndpoint: '/.netlify/functions/chat-coach', 
+            },
+
+            state: {
+                currentTab: 'home',
+                isPricingMonthly: true,
+            },
+
+            navItems: [
+                { id: 'home', label: '首页', hasSub: false },
+                { id: 'sales', label: '销售教练', hasSub: true },
+                { id: 'content', label: '内容创作', hasSub: true },
+                { id: 'workflows', label: '工作流', hasSub: true },
+                { id: 'prompts', label: '提示词库', hasSub: false },
+                { id: 'pricing', label: '定价', hasSub: false },
+            ],
+
+            navigate: (tabId) => {
+                app.state.currentTab = tabId;
+                app.renderNav();
+                app.renderView(tabId);
+                window.scrollTo(0, 0);
+            },
+
+            renderNav: () => {
+                const navContainer = document.getElementById('desktop-nav');
+                navContainer.innerHTML = app.navItems.map(item => {
+                    const isActive = app.state.currentTab === item.id;
+                    const activeClass = isActive ? 'text-blue-600 font-semibold' : 'text-slate-600 font-medium hover:text-blue-600';
+                    return `
+                        <div class="relative group h-full flex items-center px-2 cursor-pointer" onclick="app.navigate('${item.id}')">
+                            <span class="${activeClass} text-sm flex items-center gap-1 transition-colors">
+                                ${item.label} ${item.hasSub ? '<i data-lucide="chevron-down" class="w-3 h-3 mt-0.5 opacity-50"></i>' : ''}
+                            </span>
+                            ${item.id === 'home' && isActive ? '<div class="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-full"></div>' : ''}
+                        </div>`;
+                }).join('');
+                lucide.createIcons();
+            },
+
+            renderView: (tabId) => {
+                const root = document.getElementById('app-root');
+                root.innerHTML = ''; 
+                switch(tabId) {
+                    case 'home': app.views.renderHome(root); break;
+                    case 'sales': app.views.renderSales(root); break;
+                    case 'content': app.views.renderContent(root); break;
+                    case 'workflows': app.views.renderWorkflows(root); break;
+                    case 'prompts': app.views.renderPrompts(root); break;
+                    case 'pricing': app.views.renderPricing(root); break;
+                    case 'login': app.views.renderLogin(root); break;
+                    default: app.views.renderHome(root);
+                }
+                setTimeout(app.initCharts, 100);
+            },
+
+            // ============================================================
+            // 💡 智能消息发送逻辑 (自动处理 真实/演示 切换)
+            // ============================================================
+            sendMessage: async () => {
+                const input = document.getElementById('userInput');
+                const responseArea = document.getElementById('chatResponse');
+                const message = input.value.trim();
+
+                if (!message) return;
+
+                // 1. 显示用户消息
+                const userDiv = document.createElement('div');
+                userDiv.className = 'flex gap-4 flex-row-reverse fade-in mb-6';
+                userDiv.innerHTML = `
+                    <div class="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-slate-600">You</div>
+                    <div class="bg-blue-600 p-4 rounded-2xl rounded-tr-none shadow-sm text-white max-w-[85%] text-sm leading-relaxed">
+                        ${message}
+                    </div>
+                `;
+                responseArea.appendChild(userDiv);
+                
+                input.value = '';
+                responseArea.scrollTop = responseArea.scrollHeight;
+
+                // 2. 显示 Loading
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'flex gap-4 fade-in mb-6';
+                loadingDiv.id = 'loadingBubble';
+                loadingDiv.innerHTML = `
+                    <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-blue-600">AI</div>
+                    <div class="bg-white p-4 rounded-2xl rounded-tl-none shadow-sm border border-slate-200 text-slate-500 text-sm typing-indicator">
+                        AI 教练正在分析对话
+                    </div>
+                `;
+                responseArea.appendChild(loadingDiv);
+                responseArea.scrollTop = responseArea.scrollHeight;
+
+                // 3. 尝试调用 API，如果失败则切回演示模式
+                let rawAIResponse = "";
+                let isMock = false;
+
+                try {
+                    const response = await fetch(app.config.apiEndpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: message })
+                    });
+
+                    // 只有当服务器返回 200 OK 时才认为成功
+                    if (!response.ok) {
+                        // 如果是 404，说明还没部署后端，切换演示模式
+                        throw new Error(`Server Status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    rawAIResponse = data.reply || "未收到有效回复";
+
+                } catch (error) {
+                    console.warn("API 连接未就绪 (这是正常的预览状态)，已自动切换至【演示模式】。", error);
+                    // 模拟网络延迟，让体验更真实
+                    await new Promise(r => setTimeout(r, 1000));
+                    rawAIResponse = app.getMockResponse(message);
+                    isMock = true;
+                }
+
+                // 4. 移除 Loading 并显示结果
+                if(document.getElementById('loadingBubble')) document.getElementById('loadingBubble').remove();
+
+                const formattedContent = app.formatAIResponse(rawAIResponse);
+                // 如果是 Mock 模式，显示黄色提示条
+                const mockBadge = isMock ? `<div class="mb-2 text-center"><span class="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full border border-yellow-200">演示模式 (API 未连接)</span></div>` : '';
+
+                const aiDiv = document.createElement('div');
+                aiDiv.className = 'flex gap-4 fade-in mb-6';
+                aiDiv.innerHTML = `
+                    <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-blue-600">AI</div>
+                    <div class="w-full max-w-[90%]">
+                        ${mockBadge}
+                        <div class="bg-white p-5 rounded-2xl rounded-tl-none shadow-md border border-slate-200 text-slate-800 w-full">
+                            ${formattedContent}
+                        </div>
+                    </div>
+                `;
+                responseArea.appendChild(aiDiv);
+                responseArea.scrollTop = responseArea.scrollHeight;
+            },
+
+            // 演示数据生成器 (基于您的 5.1.txt 逻辑)
+            getMockResponse: (msg) => {
+                if (msg.includes("贵") || msg.includes("钱")) {
+                    return `
+【一、局势判断】
+客户心理状态：<span class='text-orange-600 font-bold'>价值疑虑</span>。客户不是没钱，而是觉得“不值”。当前处于抗拒期。
+
+【二、对话拆解】
+- ❌ 避免直接解释成本（显得防御）
+- ✅ 这是一个分离“价格”与“价值”的机会
+
+【三、下一句怎么说】
+- <span class="coach-tag">口语</span> "这确实不是笔小钱。除了价格这块，咱们在功能实现上还有其他担心的点吗？"
+- <span class="coach-tag">SaaS风</span> "理解。如果我们先不看价格，您觉得目前这个方案能完全解决您刚才提到的那个痛点吗？"
+
+【四、下一步行动建议】
+- 暂停谈价格，回溯需求
+- 确认客户的核心痛点是否被满足
+`;
+                } else if (msg.includes("考虑") || msg.includes("忙")) {
+                    return `
+【一、局势判断】
+客户心理状态：<span class='text-yellow-600 font-bold'>避险/拖延</span>。客户动力不足，或者有未说出口的顾虑。
+
+【二、对话拆解】
+- ❌ 严禁说“别急、没关系”（无效安抚）
+- ✅ 识别是“借口”还是“真顾虑”
+
+【三、下一句怎么说】
+- <span class="coach-tag">动作表达</span> "没问题，这事确实急不来。我想确认下，您主要是对后期落地服务这块还有顾虑，还是预算审批比较麻烦？"
+- <span class="coach-tag">试探</span> "行，那我先把资料发您。刚才聊的那几点，您觉得哪一点是咱们目前最急需解决的？"
+
+【四、下一步行动建议】
+- 降低压迫感
+- 给一个轻量级的下一步（如发资料）
+`;
+                } else {
+                    return `
+【一、局势判断】
+客户心理状态：<span class='text-blue-600 font-bold'>开放/观望</span>。信息不足，尚在接触初期。
+
+【二、对话拆解】
+- ❌ 避免直接甩大段介绍
+- ✅ 多用提问挖掘背景，建立信任
+
+【三、下一句怎么说】
+- <span class="coach-tag">SPIN提问</span> "在聊方案之前，我想先听听您目前在具体业务这块，最想改善的一个点是什么？"
+- <span class="coach-tag">破冰</span> "我看您之前关注过类似的产品，当时是因为什么原因没有定下来呢？"
+
+【四、下一步行动建议】
+- 挖掘痛点（Pain）
+- 确认需求（Need）
+`;
+                }
+            },
+
+            formatAIResponse: (text) => {
+                let html = typeof marked !== 'undefined' ? marked.parse(text) : text;
+                html = html.replace(/【([一二三四五六七八]、.*?)(?:（.*?）)?】/g, '<div class="coach-section-title">$1</div>');
+                if (typeof marked === 'undefined') html = html.replace(/\n/g, '<br>');
+                html = html.replace(/<strong>(.*?)<\/strong>/g, '<span class="coach-highlight">$1</span>');
+                return `<div class="coach-content">${html}</div>`;
+            },
+
+            initCharts: () => {
+                const roiCanvas = document.getElementById('roiChart');
+                if (roiCanvas) {
+                    new Chart(roiCanvas, {
+                        type: 'bar',
+                        data: {
+                            labels: ['成交周期 (天)', '赢单率 (%)', '线索响应 (分钟)'],
+                            datasets: [
+                                { label: '传统方式', data: [45, 18, 120], backgroundColor: '#cbd5e1', borderRadius: 4 },
+                                { label: 'FuyouAI 教练', data: [28, 35, 5], backgroundColor: '#2563eb', borderRadius: 4 }
+                            ]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            plugins: { legend: { position: 'bottom' } },
+                            scales: { y: { beginAtZero: true, grid: { display: false } }, x: { grid: { display: false } } }
+                        }
+                    });
+                }
+            },
+
+            toggleSalesAnnotation: (show) => { /* Same as before */ },
+
+            views: {
+                renderHome: (container) => {
+                    container.innerHTML = `
+                        <section class="pt-20 pb-32 overflow-hidden bg-white">
+                            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center">
+                                <div class="md:w-1/2 mb-12 md:mb-0 pr-0 md:pr-12 fade-in">
+                                    <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-sm font-medium mb-6 border border-blue-100">
+                                        <span class="flex h-2 w-2 rounded-full bg-blue-600 mr-2"></span>新发布：2.0 工作流引擎
+                                    </div>
+                                    <h1 class="text-4xl md:text-6xl font-bold text-slate-900 leading-tight mb-6 tracking-tight">销售增长与<br>个人品牌的<span class="text-blue-600">双引擎</span></h1>
+                                    <p class="text-xl text-slate-600 mb-8 leading-relaxed">把你的内容创作和销售跟进，全部交给 FuyouAI 自动驾驶</p>
+                                    <div class="flex flex-col sm:flex-row gap-4">
+                                        <button class="bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2">免费开始 <i data-lucide="arrow-right" class="w-5 h-5"></i></button>
+                                        <button class="bg-white text-slate-700 border border-slate-200 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-slate-50 transition-all flex items-center justify-center gap-2"><i data-lucide="play-circle" class="w-5 h-5"></i> 观看演示</button>
+                                    </div>
+                                </div>
+                                <div class="md:w-1/2 relative fade-in" style="animation-delay: 0.2s;">
+                                    <div class="absolute -top-10 -right-10 w-72 h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse"></div>
+                                    <div class="absolute -bottom-10 -left-10 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" style="animation-delay: 2s;"></div>
+                                    <div class="relative bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
+                                        <div class="bg-slate-50 border-b border-slate-100 p-4 flex items-center gap-2">
+                                            <div class="w-3 h-3 bg-red-400 rounded-full"></div><div class="w-3 h-3 bg-yellow-400 rounded-full"></div><div class="w-3 h-3 bg-green-400 rounded-full"></div>
+                                            <div class="ml-4 bg-white px-3 py-1 rounded text-xs text-slate-400 flex-1">fuyou.ai/dashboard</div>
+                                        </div>
+                                        <div class="p-8 grid gap-6">
+                                            <div class="flex gap-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                                                <div class="w-10 h-10 bg-blue-200 text-blue-700 rounded-lg flex items-center justify-center"><i data-lucide="mic" class="w-5 h-5"></i></div>
+                                                <div><h3 class="font-bold text-slate-900">销售通话分析完成</h3><p class="text-sm text-slate-600">检测到 3 个错失的成交信号</p></div>
+                                            </div>
+                                            <div class="flex gap-4 p-4 bg-purple-50 rounded-xl border border-purple-100">
+                                                <div class="w-10 h-10 bg-purple-200 text-purple-700 rounded-lg flex items-center justify-center"><i data-lucide="pen-tool" class="w-5 h-5"></i></div>
+                                                <div><h3 class="font-bold text-slate-900">LinkedIn 帖文已生成</h3><p class="text-sm text-slate-600">基于您的 "SaaS 趋势" 笔记</p></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="py-24 bg-slate-50">
+                            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                                <div class="text-center mb-16 max-w-3xl mx-auto">
+                                    <span class="text-blue-600 font-bold tracking-wider uppercase text-sm mb-4 block">Sales Coach Engine</span>
+                                    <h2 class="text-4xl md:text-5xl font-bold text-slate-900 mb-6 leading-tight">智能销售对练引擎</h2>
+                                    <p class="text-lg text-slate-600 leading-relaxed max-w-2xl">将金牌销售的经验内化为算法，为每一次沟通提供实时导航。</p>
+                                </div>
+                                <div class="flex flex-col lg:flex-row items-start gap-12">
+                                    <div class="lg:w-2/5 space-y-4">
+                                        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-500 hover:shadow-md transition-all cursor-default">
+                                            <div class="flex gap-4">
+                                                <div class="w-10 h-10 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center shrink-0"><i data-lucide="box" class="w-5 h-5"></i></div>
+                                                <div><h3 class="text-lg font-bold text-slate-900 mb-1">实战沙盘模拟</h3><p class="text-slate-600 text-sm">预置价格谈判、冷启动等 50+ 高频痛点场景。</p></div>
+                                            </div>
+                                        </div>
+                                        <div class="pt-6">
+                                            <button onclick="app.navigate('sales')" class="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2">免费开启模拟实战 <i data-lucide="arrow-right" class="w-4 h-4"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="lg:w-3/5 relative">
+                                        <div class="relative bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+                                            <div class="bg-slate-900 text-white p-4 flex items-center justify-between">
+                                                <span class="font-medium flex items-center gap-2"><div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> 实时复盘中...</span>
+                                                <span class="text-xs text-slate-400">Call ID: #8821</span>
+                                            </div>
+                                            <div class="p-6 space-y-8 bg-slate-50 h-[300px] overflow-y-auto custom-scroll">
+                                                <div class="flex gap-4"><div class="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-slate-500">Cust</div><div class="bg-white p-4 rounded-2xl rounded-tl-none shadow-sm border border-slate-200 text-slate-800 max-w-sm">这就是你们的底价了吗？</div></div>
+                                                <div class="flex gap-4 flex-row-reverse relative">
+                                                    <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-blue-600">You</div>
+                                                    <div class="bg-blue-600 p-4 rounded-2xl rounded-tr-none shadow-sm text-white max-w-sm">我们的价格确实比竞品高，但是我们的服务更好。</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- ✅ AI 销售教练交互区 -->
+                        <section id="chat-coach" class="py-20 bg-white border-b border-slate-100">
+                            <div class="max-w-4xl mx-auto px-4">
+                                 <div class="text-center mb-10">
+                                    <h2 class="text-3xl font-bold text-slate-900 mb-2">AI 销售教练 · 现场试用</h2>
+                                    <p class="text-slate-600">问我任何销售问题，我会给你最专业的模拟话术和思路。</p>
+                                </div>
+                                <div class="bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
+                                    <div id="chatResponse" class="h-96 overflow-y-auto p-6 bg-slate-50 space-y-4">
+                                         <div class="flex gap-4">
+                                            <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-blue-600">AI</div>
+                                            <div class="bg-white p-4 rounded-2xl rounded-tl-none shadow-sm border border-slate-200 text-slate-800 max-w-[85%] text-sm">
+                                                你好！我是 FuyouAI 销售教练。我可以帮你：<br>1. 看懂客户 <br>2. 修正表达 <br>3. 给下一句<br><br>试着把客户刚刚发你的话贴进来，比如：<em>“太贵了，我再考虑一下”</em>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="p-4 bg-white border-t border-slate-100 flex gap-4">
+                                        <input id="userInput" type="text" class="flex-1 border border-slate-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="输入客户说的话..." onkeydown="if(event.key==='Enter') app.sendMessage()">
+                                        <button onclick="app.sendMessage()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300">分析</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="py-24 bg-slate-900 text-white text-center">
+                            <div class="max-w-4xl mx-auto px-4">
+                                <h2 class="text-3xl md:text-4xl font-bold mb-6">让每一场对话，变成一次能力升级</h2>
+                                <p class="text-lg text-slate-400 mb-10 max-w-2xl mx-auto">当别人还在“凭感觉聊”，你已经有一位随时在线的销售教练，帮你复盘、<span class="whitespace-nowrap">提醒和校正。</span></p>
+                                <div class="flex flex-col sm:flex-row justify-center gap-4">
+                                    <button onclick="app.navigate('login')" class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/50">立即体验 FuyouAI 销售教练</button>
+                                </div>
+                            </div>
+                        </section>
+                    `;
+                    lucide.createIcons();
+                },
+                renderSales: (c) => c.innerHTML = '<div class="p-20 text-center">Sales Page Placeholder</div>',
+                renderContent: (c) => c.innerHTML = '<div class="p-20 text-center">Content Page Placeholder</div>',
+                renderPricing: (c) => c.innerHTML = '<div class="p-20 text-center">Pricing Page Placeholder</div>',
+                renderWorkflows: (c) => c.innerHTML = '<div class="p-20 text-center">Workflows Page Placeholder</div>',
+                renderPrompts: (c) => c.innerHTML = '<div class="p-20 text-center">Prompts Page Placeholder</div>',
+                renderLogin: (c) => c.innerHTML = '<div class="p-20 text-center">Login Page Placeholder</div>',
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            app.renderNav();
+            app.renderView('home');
+        });
+    </script>
+</body>
+</html>
